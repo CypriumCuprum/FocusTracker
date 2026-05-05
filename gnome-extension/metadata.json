@@ -1,0 +1,7 @@
+{
+  "uuid": "focustracker@cup.local",
+  "name": "FocusTracker Window Monitor",
+  "description": "Sends active window changes to the FocusTracker app via WebSocket.",
+  "shell-version": ["42", "43", "44", "45", "46", "47"],
+  "url": ""
+}
