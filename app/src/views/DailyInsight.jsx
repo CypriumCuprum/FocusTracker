@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import './DailyInsight.css';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -85,19 +86,25 @@ function formatYesterdayLabel() {
 
 // ── Data helpers ───────────────────────────────────────────────────────────────
 
+function localIso(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function getPeriodRange(period) {
   const today = new Date();
-  const iso = d => d.toISOString().slice(0, 10);
   if (period === 'Week') {
     const s = new Date(today); s.setDate(today.getDate() - 6);
-    return [iso(s), iso(today)];
+    return [localIso(s), localIso(today)];
   }
   if (period === 'Month') {
     const s = new Date(today); s.setDate(today.getDate() - 29);
-    return [iso(s), iso(today)];
+    return [localIso(s), localIso(today)];
   }
   const s = new Date(today); s.setFullYear(today.getFullYear() - 1); s.setDate(s.getDate() + 1);
-  return [iso(s), iso(today)];
+  return [localIso(s), localIso(today)];
 }
 
 // Build a grouped ranking: top-level parent apps each carry their child sites.
@@ -197,9 +204,10 @@ function buildDailyBars(rawHistory, period, filterPlatform) {
     const today = new Date();
     return Array.from({ length: 12 }, (_, i) => {
       const d = new Date(today.getFullYear(), today.getMonth() - 11 + i, 1);
+      const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       return {
         label: d.toLocaleDateString('en-US', { month: 'short' }),
-        seconds: byMonth[d.toISOString().slice(0, 7)] || 0,
+        seconds: byMonth[monthKey] || 0,
       };
     });
   }
@@ -208,7 +216,7 @@ function buildDailyBars(rawHistory, period, filterPlatform) {
   return Array.from({ length: days }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (days - 1 - i));
-    const date = d.toISOString().slice(0, 10);
+    const date = localIso(d);
     return {
       label: period === 'Week'
         ? d.toLocaleDateString('en-US', { weekday: 'short' }).slice(0, 3)
@@ -486,15 +494,29 @@ export default function DailyInsight({ stats }) {
     return () => obs.disconnect();
   }, []);
 
-  useEffect(() => {
+  const loadHourly = useCallback(() => {
     invoke('get_yesterday_hourly_stats').then(setHourlyRaw).catch(() => { });
   }, []);
 
-  useEffect(() => {
+  const loadHistory = useCallback(() => {
     if (tab !== 'stats') return;
     const [start, end] = getPeriodRange(period);
     invoke('get_stats_history', { startDate: start, endDate: end }).then(setHistory).catch(() => { });
   }, [tab, period]);
+
+  useEffect(() => { loadHourly(); }, [loadHourly]);
+
+  useEffect(() => { loadHistory(); }, [loadHistory]);
+
+  // Auto-refresh when backend emits stats-updated
+  useEffect(() => {
+    let unlisten;
+    listen('stats-updated', () => {
+      loadHourly();
+      loadHistory();
+    }).then(fn => { unlisten = fn; });
+    return () => { unlisten?.(); };
+  }, [loadHourly, loadHistory]);
 
   // Reset drill-down when switching tabs or periods
   useEffect(() => { setSelectedApp(null); }, [tab, period]);

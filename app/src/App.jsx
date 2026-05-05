@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import FocusView    from './views/FocusView';
 import DailyInsight from './views/DailyInsight';
 import Settings     from './views/Settings';
@@ -26,6 +27,14 @@ export default function App() {
     loadTasks();
     loadStats();
   }, [loadTasks, loadStats]);
+
+  // Re-fetch yesterday stats whenever backend signals new data written
+  useEffect(() => {
+    let unlisten;
+    listen('stats-updated', () => loadStats()).then(fn => { unlisten = fn; });
+    return () => { unlisten?.(); };
+  }, [loadStats]);
+
 
   const toggleInsight  = () => setView(v => v === 'insight'  ? 'focus' : 'insight');
   const toggleSettings = () => setView(v => v === 'settings' ? 'focus' : 'settings');
