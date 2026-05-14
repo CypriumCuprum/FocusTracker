@@ -21,22 +21,30 @@ function BarTooltip({ cx, barTop, label, maxX }) {
   );
 }
 
-function StackedTooltip({ cx, barTop, segments, maxX }) {
-  const lineH = 19;
-  const PAD   = 11;
-  const W     = 178;
-  const H     = segments.length * lineH + PAD * 2 - 4;
-  const tx    = Math.min(Math.max(cx - W / 2, 0), Math.max(maxX - W, 0));
-  const ty    = Math.max(barTop - H - 6, 2);
+function StackedTooltip({ cx, barTop, segments, total, maxX }) {
+  const lineH    = 19;
+  const PAD      = 11;
+  const W        = 178;
+  const totalRow = 20;
+  const H        = totalRow + segments.length * lineH + PAD * 2 - 2;
+  const tx       = Math.min(Math.max(cx - W / 2, 0), Math.max(maxX - W, 0));
+  const ty       = Math.max(barTop - H - 6, 2);
   return (
     <g transform={`translate(${tx},${ty})`} pointerEvents="none">
       <rect width={W} height={H} rx={4}
         fill="rgba(15,23,42,0.95)" stroke="rgba(255,255,255,0.12)" strokeWidth={0.5} />
+      {/* Total row */}
+      <text x={PAD} y={PAD + 8}
+        fontSize="11" fontWeight="600" fill="rgba(255,255,255,0.95)">
+        Total — {fmtShort(total)}
+      </text>
+      <line x1={PAD} y1={PAD + totalRow - 4} x2={W - PAD} y2={PAD + totalRow - 4}
+        stroke="rgba(255,255,255,0.10)" strokeWidth={0.5} />
       {segments.map((seg, i) => (
-        <g key={seg.name} transform={`translate(0,${PAD + i * lineH - 4})`}>
+        <g key={seg.name} transform={`translate(0,${PAD + totalRow + i * lineH - 4})`}>
           <rect x={PAD} y={3} width={8} height={8} rx={2} fill={seg.color} />
           <text x={PAD + 13} y={11}
-            dominantBaseline="auto" fontSize="11" fill="rgba(255,255,255,0.85)">
+            dominantBaseline="auto" fontSize="11" fill="rgba(255,255,255,0.75)">
             {seg.name} — {fmtShort(seg.seconds)}
           </text>
         </g>
@@ -198,7 +206,7 @@ export function DailyChart({ bars, width, height, stacked, onBarClick }) {
                 <rect x={x} y={CHART_H - 2} width={BAR} height={2}
                   fill="rgba(255,255,255,0.06)" rx={1} />
               )}
-              {!stacked && showInline && barH >= 22 && (
+              {showInline && barH >= 22 && (
                 <text
                   x={cx} y={cy}
                   textAnchor="middle" dominantBaseline="middle"
@@ -224,6 +232,7 @@ export function DailyChart({ bars, width, height, stacked, onBarClick }) {
               cx={hoveredBar * (BAR + GAP) + BAR / 2}
               barTop={CHART_H - hoveredBarH}
               segments={hovered.segments}
+              total={hovered.seconds}
               maxX={svgW}
             />
           ) : (
