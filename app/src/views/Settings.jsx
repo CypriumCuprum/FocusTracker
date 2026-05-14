@@ -1,18 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { useTauriEvent } from '../hooks/useTauriEvent';
 import './Settings.css';
 
 export default function Settings() {
   const [browserClients, setBrowserClients] = useState(0);
 
-  useEffect(() => {
+  const loadStatus = useCallback(() => {
     invoke('get_ws_status').then(setBrowserClients).catch(() => {});
-    const unsub = listen('ws-client-changed', () =>
-      invoke('get_ws_status').then(setBrowserClients).catch(() => {})
-    );
-    return () => { unsub.then(f => f()); };
   }, []);
+
+  useEffect(() => { loadStatus(); }, [loadStatus]);
+  useTauriEvent('ws-client-changed', loadStatus);
 
   return (
     <div className="settings-view page-enter">

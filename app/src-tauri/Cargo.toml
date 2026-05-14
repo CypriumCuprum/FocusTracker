@@ -1,6 +1,6 @@
 [package]
 name = "focustracker"
-version = "0.1.0"
+version = "0.1.1"
 description = "FocusTracker - Task & Focus Time Manager"
 authors = ["cup"]
 license = ""

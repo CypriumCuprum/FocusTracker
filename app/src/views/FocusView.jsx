@@ -1,51 +1,9 @@
 import { useState, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import TaskModal from '../components/TaskModal';
+import { formatDueDate } from '../lib/format';
+import { PRIORITY, sortTasks, getMainTask } from '../lib/tasks';
 import './FocusView.css';
-
-const PRIORITY = {
-  high:   { color: '#ff8585', order: 0 },
-  medium: { color: '#fbbf24', order: 1 },
-  low:    { color: '#60a5fa', order: 2 },
-};
-
-function formatDueDate(dateStr) {
-  const date  = new Date(dateStr.slice(0, 10) + 'T00:00:00');
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const diff  = Math.round((date - today) / 86400000);
-  if (diff === 0)  return { label: 'Today',     overdue: false };
-  if (diff === 1)  return { label: 'Tomorrow',  overdue: false };
-  if (diff === -1) return { label: 'Yesterday', overdue: true  };
-  if (diff < 0)    return { label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), overdue: true };
-  const opts = date.getFullYear() === new Date().getFullYear()
-    ? { month: 'short', day: 'numeric' }
-    : { month: 'short', day: 'numeric', year: 'numeric' };
-  return { label: date.toLocaleDateString('en-US', opts), overdue: false };
-}
-
-function getMainTask(tasks) {
-  const pending = tasks.filter(t => t.status === 'pending');
-  if (!pending.length) return null;
-  return [...pending].sort((a, b) => {
-    const pd = PRIORITY[a.priority || 'medium'].order - PRIORITY[b.priority || 'medium'].order;
-    if (pd !== 0) return pd;
-    if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date);
-    return a.due_date ? -1 : b.due_date ? 1 : 0;
-  })[0];
-}
-
-// Pending tasks sorted by priority then due date; completed tasks at the bottom
-function sortTasks(tasks) {
-  const cmp = (a, b) => {
-    const pd = PRIORITY[a.priority || 'medium'].order - PRIORITY[b.priority || 'medium'].order;
-    if (pd !== 0) return pd;
-    if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date);
-    return a.due_date ? -1 : b.due_date ? 1 : 0;
-  };
-  const pending   = tasks.filter(t => t.status === 'pending').sort(cmp);
-  const completed = tasks.filter(t => t.status !== 'pending');
-  return [...pending, ...completed];
-}
 
 export default function FocusView({ tasks, onRefresh }) {
   const [addOpen,     setAddOpen]     = useState(false);
@@ -116,8 +74,6 @@ export default function FocusView({ tasks, onRefresh }) {
     </div>
   );
 }
-
-// ── Task row ──────────────────────────────────────────────────────────────────
 
 function TaskRow({ task, onToggle, onDelete, onEdit }) {
   const done  = task.status === 'completed';

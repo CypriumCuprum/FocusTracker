@@ -1,15 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { useTauriEvent } from './hooks/useTauriEvent';
+import { formatHeaderDate } from './lib/format';
 import FocusView    from './views/FocusView';
 import DailyInsight from './views/DailyInsight';
 import AppsView     from './views/AppsView';
 import Settings     from './views/Settings';
 import './App.css';
-
-function formatDate() {
-  return new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
 
 export default function App() {
   const [view,  setView]  = useState('focus');
@@ -29,41 +26,32 @@ export default function App() {
     loadStats();
   }, [loadTasks, loadStats]);
 
-  // Re-fetch today stats whenever backend signals new data written
-  useEffect(() => {
-    let unlisten;
-    listen('stats-updated', () => loadStats()).then(fn => { unlisten = fn; });
-    return () => { unlisten?.(); };
-  }, [loadStats]);
+  useTauriEvent('stats-updated', loadStats);
 
-
-  const toggleInsight  = () => setView(v => v === 'insight'  ? 'focus' : 'insight');
-  const toggleApps     = () => setView(v => v === 'apps'     ? 'focus' : 'apps');
-  const toggleSettings = () => setView(v => v === 'settings' ? 'focus' : 'settings');
-
+  const toggleView = name => setView(v => v === name ? 'focus' : name);
   const pending = tasks.filter(t => t.status === 'pending');
 
   return (
     <div className="app">
       <header className="app-header">
-        <span className="app-date">{formatDate()}</span>
+        <span className="app-date">{formatHeaderDate()}</span>
         <span className="app-count">
           {pending.length} task{pending.length !== 1 ? 's' : ''} pending
         </span>
         <div className="nav-icons">
           <button
             className={`nav-btn ${view === 'apps' ? 'active' : ''}`}
-            onClick={toggleApps}
+            onClick={() => toggleView('apps')}
             title="Apps & Websites"
           >⊞</button>
           <button
             className={`nav-btn ${view === 'settings' ? 'active' : ''}`}
-            onClick={toggleSettings}
+            onClick={() => toggleView('settings')}
             title="Settings"
           >⚙</button>
           <button
             className={`nav-btn ${view === 'insight' ? 'active' : ''}`}
-            onClick={toggleInsight}
+            onClick={() => toggleView('insight')}
             title={view === 'insight' ? 'Back to Focus' : 'Daily Insight'}
           >{view === 'insight' ? '◎' : '◉'}</button>
         </div>

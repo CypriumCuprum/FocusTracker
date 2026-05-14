@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import Modal from '../components/Modal';
+import { useTauriEvent } from '../hooks/useTauriEvent';
+import { fmt } from '../lib/format';
+import { displayName } from '../lib/platforms';
 import './AppsView.css';
 
 const COLOR_PALETTE = [
@@ -14,48 +17,16 @@ function pickNextColor(usedColors) {
   return COLOR_PALETTE.find(c => !used.has(c)) ?? COLOR_PALETTE[0];
 }
 
-const DISPLAY_NAMES = {
-  'youtube.com':      'YouTube',
-  'facebook.com':     'Facebook',
-  'x.com':            'X',
-  'twitter.com':      'Twitter',
-  'tiktok.com':       'TikTok',
-  'instagram.com':    'Instagram',
-  'reddit.com':       'Reddit',
-  'twitch.tv':        'Twitch',
-  'netflix.com':      'Netflix',
-  'github.com':       'GitHub',
-  'docs.google.com':  'Google Docs',
-  'sheets.google.com':'Google Sheets',
-  'slides.google.com':'Google Slides',
-  'mail.google.com':  'Gmail',
-  'discord.com':      'Discord',
-  'notion.so':        'Notion',
-  'figma.com':        'Figma',
-};
-
-function displayName(p) {
-  return DISPLAY_NAMES[p.toLowerCase()] ?? p;
-}
-
-function fmt(secs) {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
-  if (m > 0) return `${m}m`;
-  return `${secs}s`;
-}
-
 export default function AppsView() {
-  const [platforms,   setPlatforms]   = useState([]);
-  const [categories,  setCategories]  = useState([]);
+  const [platforms,    setPlatforms]    = useState([]);
+  const [categories,   setCategories]   = useState([]);
   const [openDropdown, setOpenDropdown] = useState(null);
-  const [showAddCat,  setShowAddCat]  = useState(false);
-  const [newCatName,  setNewCatName]  = useState('');
-  const [newCatColor, setNewCatColor] = useState('#c084fc');
-  const [editingCat,  setEditingCat]  = useState(null);   // { id, name, color }
-  const [editName,    setEditName]    = useState('');
-  const [editColor,   setEditColor]   = useState('');
+  const [showAddCat,   setShowAddCat]   = useState(false);
+  const [newCatName,   setNewCatName]   = useState('');
+  const [newCatColor,  setNewCatColor]  = useState('#c084fc');
+  const [editingCat,   setEditingCat]   = useState(null);
+  const [editName,     setEditName]     = useState('');
+  const [editColor,    setEditColor]    = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -68,12 +39,8 @@ export default function AppsView() {
     } catch {}
   }, []);
 
-  useEffect(() => {
-    load();
-    let unlisten;
-    listen('categories-updated', load).then(fn => { unlisten = fn; });
-    return () => { unlisten?.(); };
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
+  useTauriEvent('categories-updated', load);
 
   async function handleSetCategory(platform, categoryId) {
     try { await invoke('set_platform_category', { platform, categoryId }); } catch {}
@@ -144,90 +111,79 @@ export default function AppsView() {
       </div>
 
       {showAddCat && (
-        <div className="modal-backdrop" onClick={() => setShowAddCat(false)}>
-          <div className="modal-card" onClick={e => e.stopPropagation()}>
-            <h3 className="modal-heading">New Category</h3>
-            <div className="modal-field">
-              <label className="modal-label">Name</label>
-              <input
-                className="modal-input"
-                value={newCatName}
-                onChange={e => setNewCatName(e.target.value)}
-                placeholder="e.g. Work, Entertainment"
-                autoFocus
-                onKeyDown={e => {
-                  if (e.key === 'Enter') handleAddCategory();
-                  if (e.key === 'Escape') setShowAddCat(false);
-                }}
-              />
-            </div>
-            <div className="modal-field">
-              <label className="modal-label">Color</label>
-              <div className="color-field">
-                <input
-                  type="color"
-                  value={newCatColor}
-                  onChange={e => setNewCatColor(e.target.value)}
-                  className="color-input"
-                />
-                <span className="color-preview" style={{ background: newCatColor }} />
-                <span className="color-hex">{newCatColor}</span>
-              </div>
-            </div>
-            <div className="modal-actions">
-              <button className="btn-ghost" onClick={() => setShowAddCat(false)}>Cancel</button>
-              <button
-                className="btn-grad"
-                onClick={handleAddCategory}
-                disabled={!newCatName.trim()}
-              >Add</button>
-            </div>
-          </div>
-        </div>
+        <Modal onClose={() => setShowAddCat(false)}>
+          <CategoryForm
+            heading="New Category"
+            name={newCatName}
+            color={newCatColor}
+            onNameChange={setNewCatName}
+            onColorChange={setNewCatColor}
+            onCancel={() => setShowAddCat(false)}
+            onSubmit={handleAddCategory}
+            submitLabel="Add"
+            namePlaceholder="e.g. Work, Entertainment"
+          />
+        </Modal>
       )}
 
       {editingCat && (
-        <div className="modal-backdrop" onClick={() => setEditingCat(null)}>
-          <div className="modal-card" onClick={e => e.stopPropagation()}>
-            <h3 className="modal-heading">Edit Category</h3>
-            <div className="modal-field">
-              <label className="modal-label">Name</label>
-              <input
-                className="modal-input"
-                value={editName}
-                onChange={e => setEditName(e.target.value)}
-                autoFocus
-                onKeyDown={e => {
-                  if (e.key === 'Enter') handleEditCategory();
-                  if (e.key === 'Escape') setEditingCat(null);
-                }}
-              />
-            </div>
-            <div className="modal-field">
-              <label className="modal-label">Color</label>
-              <div className="color-field">
-                <input
-                  type="color"
-                  value={editColor}
-                  onChange={e => setEditColor(e.target.value)}
-                  className="color-input"
-                />
-                <span className="color-preview" style={{ background: editColor }} />
-                <span className="color-hex">{editColor}</span>
-              </div>
-            </div>
-            <div className="modal-actions">
-              <button className="btn-ghost" onClick={() => setEditingCat(null)}>Cancel</button>
-              <button
-                className="btn-grad"
-                onClick={handleEditCategory}
-                disabled={!editName.trim()}
-              >Save</button>
-            </div>
-          </div>
-        </div>
+        <Modal onClose={() => setEditingCat(null)}>
+          <CategoryForm
+            heading="Edit Category"
+            name={editName}
+            color={editColor}
+            onNameChange={setEditName}
+            onColorChange={setEditColor}
+            onCancel={() => setEditingCat(null)}
+            onSubmit={handleEditCategory}
+            submitLabel="Save"
+          />
+        </Modal>
       )}
     </div>
+  );
+}
+
+function CategoryForm({
+  heading, name, color, onNameChange, onColorChange,
+  onCancel, onSubmit, submitLabel, namePlaceholder,
+}) {
+  return (
+    <>
+      <h3 className="modal-heading">{heading}</h3>
+      <div className="modal-field">
+        <label className="modal-label">Name</label>
+        <input
+          className="modal-input"
+          value={name}
+          onChange={e => onNameChange(e.target.value)}
+          placeholder={namePlaceholder}
+          autoFocus
+          onKeyDown={e => { if (e.key === 'Enter') onSubmit(); }}
+        />
+      </div>
+      <div className="modal-field">
+        <label className="modal-label">Color</label>
+        <div className="color-field">
+          <input
+            type="color"
+            value={color}
+            onChange={e => onColorChange(e.target.value)}
+            className="color-input"
+          />
+          <span className="color-preview" style={{ background: color }} />
+          <span className="color-hex">{color}</span>
+        </div>
+      </div>
+      <div className="modal-actions">
+        <button className="btn-ghost" onClick={onCancel}>Cancel</button>
+        <button
+          className="btn-grad"
+          onClick={onSubmit}
+          disabled={!name.trim()}
+        >{submitLabel}</button>
+      </div>
+    </>
   );
 }
 
