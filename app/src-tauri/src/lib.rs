@@ -6,7 +6,7 @@ use rusqlite::Connection;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    Manager, WindowEvent, State,
+    Emitter, Manager, WindowEvent, State,
 };
 
 type DbState = Arc<Mutex<Connection>>;
@@ -57,6 +57,12 @@ fn get_yesterday_stats(state: State<DbState>) -> Result<Vec<db::SocialStat>, Str
 }
 
 #[tauri::command]
+fn get_today_hourly_stats(state: State<DbState>) -> Result<Vec<db::HourlyStat>, String> {
+    let conn = state.lock().map_err(|e| e.to_string())?;
+    db::get_today_hourly_stats(&conn).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn get_yesterday_hourly_stats(state: State<DbState>) -> Result<Vec<db::HourlyStat>, String> {
     let conn = state.lock().map_err(|e| e.to_string())?;
     db::get_yesterday_hourly_stats(&conn).map_err(|e| e.to_string())
@@ -66,6 +72,48 @@ fn get_yesterday_hourly_stats(state: State<DbState>) -> Result<Vec<db::HourlySta
 fn get_stats_history(state: State<DbState>, start_date: String, end_date: String) -> Result<Vec<db::SocialStat>, String> {
     let conn = state.lock().map_err(|e| e.to_string())?;
     db::get_stats_history(&conn, &start_date, &end_date).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_hourly_stats_for_date(state: State<DbState>, date: String) -> Result<Vec<db::HourlyStat>, String> {
+    let conn = state.lock().map_err(|e| e.to_string())?;
+    db::get_hourly_stats(&conn, &date).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_all_platforms(state: State<DbState>) -> Result<Vec<db::PlatformEntry>, String> {
+    let conn = state.lock().map_err(|e| e.to_string())?;
+    db::get_all_platforms(&conn).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_app_categories(state: State<DbState>) -> Result<Vec<db::AppCategory>, String> {
+    let conn = state.lock().map_err(|e| e.to_string())?;
+    db::get_app_categories(&conn).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_app_category(state: State<DbState>, app: tauri::AppHandle, id: i64, name: String, color: String) -> Result<(), String> {
+    let conn = state.lock().map_err(|e| e.to_string())?;
+    db::update_app_category(&conn, id, &name, &color).map_err(|e| e.to_string())?;
+    app.emit("categories-updated", ()).ok();
+    Ok(())
+}
+
+#[tauri::command]
+fn add_app_category(state: State<DbState>, app: tauri::AppHandle, name: String, color: String) -> Result<i64, String> {
+    let conn = state.lock().map_err(|e| e.to_string())?;
+    let id = db::add_app_category(&conn, &name, &color).map_err(|e| e.to_string())?;
+    app.emit("categories-updated", ()).ok();
+    Ok(id)
+}
+
+#[tauri::command]
+fn set_platform_category(state: State<DbState>, app: tauri::AppHandle, platform: String, category_id: Option<i64>) -> Result<(), String> {
+    let conn = state.lock().map_err(|e| e.to_string())?;
+    db::set_platform_category(&conn, &platform, category_id).map_err(|e| e.to_string())?;
+    app.emit("categories-updated", ()).ok();
+    Ok(())
 }
 
 #[tauri::command]
@@ -90,9 +138,16 @@ pub fn run() {
             toggle_task,
             delete_task,
             get_today_stats,
+            get_today_hourly_stats,
             get_yesterday_stats,
             get_yesterday_hourly_stats,
             get_stats_history,
+            get_hourly_stats_for_date,
+            get_all_platforms,
+            get_app_categories,
+            add_app_category,
+            update_app_category,
+            set_platform_category,
             get_ws_status,
         ])
         .on_window_event(|window, event| match event {

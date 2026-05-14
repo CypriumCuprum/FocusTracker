@@ -14,7 +14,15 @@ A lightweight, privacy-first screen time tracker for Linux (Ubuntu/GNOME). Built
 
 ### 📈 Statistics
 - Weekly, monthly, and yearly overview charts.
+- **Day drill-down** — click any bar in the Week view to zoom into that day's hourly breakdown.
+- **Category stacked chart** — once categories are assigned, each bar splits into colored segments showing time by category. Falls back to a plain gradient when no categories exist.
 - Per-app history — drill into any app to see its usage trend over time.
+
+### 🗂 Apps & Websites
+- Lists every tracked desktop app and website with its total time.
+- **Categories** — create named, color-coded categories (Work, Entertainment, Learning, etc.) and assign them to any platform.
+- New categories automatically get a visually distinct color from a curated palette.
+- Edit category name and color at any time via the chips bar at the top of the view.
 
 ### ✅ Task Manager
 - Add, complete, and delete tasks.
@@ -93,28 +101,30 @@ cd FocusTracker
 
 ---
 
-### Step 2 — Build the Desktop App
+### Step 2 — Build and install the Desktop App
+
+The quickest way is to use the included install script, which builds and installs in one step:
+
+```bash
+bash install.sh
+```
+
+> ⏳ First build takes 5–15 minutes (compiling Rust dependencies). Subsequent builds are much faster.
+
+The script will:
+1. Run `npm install` and `npx tauri build`
+2. Copy the binary to `~/.local/bin/focustracker`
+3. Restart the systemd service if one already exists
+
+**Manual alternative:**
 
 ```bash
 cd app
 npm install
 npx tauri build
-```
 
-> ⏳ First build takes 5–15 minutes (compiling Rust dependencies). Subsequent builds are much faster.
-
-After building, the binary is located at:
-```
-app/src-tauri/target/release/focustracker
-```
-
----
-
-### Step 3 — Install the binary
-
-```bash
 mkdir -p ~/.local/bin
-cp app/src-tauri/target/release/focustracker ~/.local/bin/focustracker
+cp src-tauri/target/release/focustracker ~/.local/bin/focustracker
 chmod +x ~/.local/bin/focustracker
 ```
 

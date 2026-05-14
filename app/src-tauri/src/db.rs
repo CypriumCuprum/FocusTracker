@@ -38,6 +38,26 @@ pub struct HourlyStat {
     pub parent_app:         Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AppCategory {
+    pub id:    i64,
+    pub name:  String,
+    pub color: String,
+}
+
+/// A tracked platform (desktop app or website) with its category assignment.
+/// `is_website` is true when the platform comes from the browser extension
+/// (parent_app = 'Browser'). The "Browser" entry itself is never returned.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PlatformEntry {
+    pub platform:       String,
+    pub total_seconds:  i64,
+    pub category_id:    Option<i64>,
+    pub category_name:  Option<String>,
+    pub category_color: Option<String>,
+    pub is_website:     bool,
+}
+
 pub fn get_db_path() -> PathBuf {
     let mut path = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("."));
     path.push("FocusTracker");
@@ -77,6 +97,15 @@ pub fn init_db(conn: &Connection) -> Result<()> {
         CREATE TABLE IF NOT EXISTS settings (
             key   TEXT PRIMARY KEY,
             value TEXT
+        );
+        CREATE TABLE IF NOT EXISTS app_categories (
+            id    INTEGER PRIMARY KEY AUTOINCREMENT,
+            name  TEXT NOT NULL UNIQUE,
+            color TEXT NOT NULL DEFAULT '#888888'
+        );
+        CREATE TABLE IF NOT EXISTS platform_category (
+            platform    TEXT PRIMARY KEY,
+            category_id INTEGER REFERENCES app_categories(id) ON DELETE SET NULL
         );
     ")?;
 
@@ -238,8 +267,89 @@ fn map_social_stat(row: &rusqlite::Row<'_>) -> rusqlite::Result<SocialStat> {
     })
 }
 
+pub fn get_today_hourly_stats(conn: &Connection) -> Result<Vec<HourlyStat>> {
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    get_hourly_stats(conn, &today)
+}
+
 pub fn get_yesterday_hourly_stats(conn: &Connection) -> Result<Vec<HourlyStat>> {
     let yesterday = (chrono::Local::now() - chrono::Duration::days(1))
         .format("%Y-%m-%d").to_string();
     get_hourly_stats(conn, &yesterday)
+}
+
+/// Returns all categorizable platforms (desktop apps + websites, excluding "Browser" itself),
+/// joined with their category assignment if any.
+pub fn get_all_platforms(conn: &Connection) -> Result<Vec<PlatformEntry>> {
+    let mut stmt = conn.prepare(
+        "SELECT ss.platform,
+                SUM(ss.time_spent_seconds)                            AS total_seconds,
+                pc.category_id,
+                cat.name                                              AS category_name,
+                cat.color                                             AS category_color,
+                CASE WHEN MAX(ss.parent_app) IS NOT NULL THEN 1 ELSE 0 END AS is_website
+         FROM social_stats ss
+         LEFT JOIN platform_category pc ON pc.platform = ss.platform
+         LEFT JOIN app_categories cat   ON cat.id = pc.category_id
+         WHERE (ss.parent_app IS NULL AND ss.platform != 'Browser')
+            OR ss.parent_app = 'Browser'
+         GROUP BY ss.platform
+         ORDER BY SUM(ss.time_spent_seconds) DESC"
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(PlatformEntry {
+            platform:       row.get(0)?,
+            total_seconds:  row.get(1)?,
+            category_id:    row.get(2)?,
+            category_name:  row.get(3)?,
+            category_color: row.get(4)?,
+            is_website:     row.get::<_, i64>(5)? != 0,
+        })
+    })?
+    .collect::<Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
+pub fn get_app_categories(conn: &Connection) -> Result<Vec<AppCategory>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, color FROM app_categories ORDER BY name"
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(AppCategory { id: row.get(0)?, name: row.get(1)?, color: row.get(2)? })
+    })?
+    .collect::<Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
+pub fn update_app_category(conn: &Connection, id: i64, name: &str, color: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE app_categories SET name = ?1, color = ?2 WHERE id = ?3",
+        params![name, color, id],
+    )?;
+    Ok(())
+}
+
+pub fn add_app_category(conn: &Connection, name: &str, color: &str) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO app_categories (name, color) VALUES (?1, ?2)",
+        params![name, color],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+/// Assign or remove a category for a platform.
+/// Passing `None` for `category_id` removes the assignment.
+pub fn set_platform_category(conn: &Connection, platform: &str, category_id: Option<i64>) -> Result<()> {
+    if let Some(cat_id) = category_id {
+        conn.execute(
+            "INSERT OR REPLACE INTO platform_category (platform, category_id) VALUES (?1, ?2)",
+            params![platform, cat_id],
+        )?;
+    } else {
+        conn.execute(
+            "DELETE FROM platform_category WHERE platform = ?1",
+            params![platform],
+        )?;
+    }
+    Ok(())
 }

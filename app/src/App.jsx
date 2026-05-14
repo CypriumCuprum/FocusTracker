@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import FocusView    from './views/FocusView';
 import DailyInsight from './views/DailyInsight';
+import AppsView     from './views/AppsView';
 import Settings     from './views/Settings';
 import './App.css';
 
@@ -20,7 +21,7 @@ export default function App() {
   }, []);
 
   const loadStats = useCallback(async () => {
-    try { setStats(await invoke('get_yesterday_stats')); } catch {}
+    try { setStats(await invoke('get_today_stats')); } catch {}
   }, []);
 
   useEffect(() => {
@@ -28,7 +29,7 @@ export default function App() {
     loadStats();
   }, [loadTasks, loadStats]);
 
-  // Re-fetch yesterday stats whenever backend signals new data written
+  // Re-fetch today stats whenever backend signals new data written
   useEffect(() => {
     let unlisten;
     listen('stats-updated', () => loadStats()).then(fn => { unlisten = fn; });
@@ -37,6 +38,7 @@ export default function App() {
 
 
   const toggleInsight  = () => setView(v => v === 'insight'  ? 'focus' : 'insight');
+  const toggleApps     = () => setView(v => v === 'apps'     ? 'focus' : 'apps');
   const toggleSettings = () => setView(v => v === 'settings' ? 'focus' : 'settings');
 
   const pending = tasks.filter(t => t.status === 'pending');
@@ -49,6 +51,11 @@ export default function App() {
           {pending.length} task{pending.length !== 1 ? 's' : ''} pending
         </span>
         <div className="nav-icons">
+          <button
+            className={`nav-btn ${view === 'apps' ? 'active' : ''}`}
+            onClick={toggleApps}
+            title="Apps & Websites"
+          >⊞</button>
           <button
             className={`nav-btn ${view === 'settings' ? 'active' : ''}`}
             onClick={toggleSettings}
@@ -64,6 +71,7 @@ export default function App() {
 
       {view === 'focus'    && <FocusView    key="focus"    tasks={tasks} onRefresh={loadTasks} />}
       {view === 'insight'  && <DailyInsight key="insight"  stats={stats} />}
+      {view === 'apps'     && <AppsView     key="apps"     />}
       {view === 'settings' && <Settings     key="settings" />}
     </div>
   );
